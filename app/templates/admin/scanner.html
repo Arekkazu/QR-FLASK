@@ -1,0 +1,624 @@
+{% extends "base.html" %} {% block head %}
+<style>
+    #reader {
+        width: 100%;
+        max-width: 500px;
+        margin: 0 auto;
+        border: 3px solid #0d6efd;
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 0 20px rgba(13, 110, 253, 0.3);
+    }
+    .scanner-container {
+        text-align: center;
+        padding: 20px;
+        background: #e9ecef;
+        border-radius: 15px;
+        margin: 20px auto;
+        max-width: 600px;
+    }
+    .status-indicator {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background-color: #ffc107;
+        margin-right: 10px;
+        animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+        0% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.5;
+        }
+        100% {
+            opacity: 1;
+        }
+    }
+    .status-active {
+        background-color: #28a745;
+        animation: pulse 1s infinite;
+    }
+    .status-inactive {
+        background-color: #dc3545;
+        animation: none;
+    }
+    .status-loading {
+        background-color: #17a2b8;
+        animation: pulse 0.8s infinite;
+    }
+    #manualInput {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 15px;
+        border: 2px dashed #6c757d;
+    }
+    .camera-error {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 10px 0;
+    }
+    .btn-group-scanner {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    /* Estilos para preview de cámara */
+    .camera-preview-container {
+        position: relative;
+        width: 100%;
+        max-width: 500px;
+        margin: 20px auto;
+        border-radius: 15px;
+        overflow: hidden;
+        background: #000;
+        display: none;
+    }
+
+    #cameraPreview {
+        width: 100%;
+        height: auto;
+        display: block;
+    }
+
+    .scan-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.3);
+    }
+
+    .scan-box {
+        position: relative;
+        width: 250px;
+        height: 250px;
+        border: 2px solid #00ff00;
+        border-radius: 10px;
+        background: rgba(0, 255, 0, 0.1);
+        animation: scanPulse 2s ease-in-out infinite;
+    }
+
+    .scan-corners {
+        position: absolute;
+        inset: -10px;
+    }
+
+    .scan-corners::before,
+    .scan-corners::after {
+        content: "";
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        border: 3px solid #00ff00;
+        border-radius: 3px;
+    }
+
+    .scan-corners::before {
+        top: 0;
+        left: 0;
+        border-right: none;
+        border-bottom: none;
+        animation: cornerFlash 1.5s ease-in-out infinite;
+    }
+
+    .scan-corners::after {
+        bottom: 0;
+        right: 0;
+        border-left: none;
+        border-top: none;
+        animation: cornerFlash 1.5s ease-in-out infinite 0.75s;
+    }
+
+    .scan-instructions {
+        color: white;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 14px;
+        margin-top: 20px;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+
+    @keyframes scanPulse {
+        0%,
+        100% {
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+            transform: scale(1);
+        }
+        50% {
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.6);
+            transform: scale(1.02);
+        }
+    }
+
+    @keyframes cornerFlash {
+        0%,
+        100% {
+            opacity: 1;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+        50% {
+            opacity: 0.3;
+            box-shadow: 0 0 5px rgba(0, 255, 0, 0.2);
+        }
+    }
+
+    @media (max-width: 768px) {
+        .btn-group-scanner {
+            flex-direction: column;
+            align-items: center;
+        }
+        .btn-group-scanner .btn {
+            min-width: 200px;
+        }
+        .scan-box {
+            width: 200px;
+            height: 200px;
+        }
+        .camera-preview-container {
+            max-width: 350px;
+        }
+    }
+</style>
+{% endblock %} {% block content %}
+<div class="row justify-content-center mb-4">
+    <div class="col-md-8 text-center">
+        <h1 class="display-4">
+            <i class="fas fa-camera me-2"></i>Registrar Asistencia
+        </h1>
+        <p class="lead text-muted">
+            Escanea el código QR del usuario para registrar su asistencia
+        </p>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="scanner-container">
+            <div class="mb-3">
+                <span class="status-indicator" id="statusIndicator"></span>
+                <span class="h5" id="statusText">Preparando escáner...</span>
+            </div>
+            <div id="reader" style="display: none"></div>
+
+            <!-- Preview de la cámara -->
+            <div class="camera-preview-container" id="cameraPreviewContainer">
+                <video id="cameraPreview" autoplay playsinline muted></video>
+                <div class="scan-overlay">
+                    <div class="scan-box" id="scanBox">
+                        <div class="scan-corners"></div>
+                    </div>
+                    <div class="scan-instructions" id="scanInstructions">
+                        Coloca el código QR dentro del recuadro
+                    </div>
+                </div>
+            </div>
+            <div id="manualInput" class="mt-3" style="display: none">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    La cámara no está disponible. Ingresa el código QR
+                    manualmente:
+                </div>
+                <div class="input-group mb-3">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="manualQrInput"
+                        placeholder="Pega aquí el código QR escaneado"
+                    />
+                    <button class="btn btn-success" id="submitManualQr">
+                        <i class="fas fa-check me-2"></i>Registrar
+                    </button>
+                </div>
+            </div>
+            <div class="mt-3 btn-group-scanner">
+                <button id="startButton" class="btn btn-primary">
+                    <i class="fas fa-video me-2"></i>Iniciar Cámara
+                </button>
+                <button id="stopButton" class="btn btn-danger d-none">
+                    <i class="fas fa-video-slash me-2"></i>Detener
+                </button>
+                <button
+                    id="manualButton"
+                    class="btn btn-warning"
+                    style="display: none"
+                >
+                    <i class="fas fa-keyboard me-2"></i>Ingreso Manual
+                </button>
+                <button id="fileButton" class="btn btn-info">
+                    <i class="fas fa-file-image me-2"></i>Desde Archivo
+                </button>
+                <input
+                    type="file"
+                    id="fileInput"
+                    accept="image/*"
+                    style="display: none"
+                />
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h3 class="h5 mb-0">
+                            <i class="fas fa-history me-2"></i>Últimos Registros
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <div
+                            class="d-flex justify-content-center align-items-center"
+                            style="height: 150px"
+                        >
+                            <p class="text-muted mb-0">
+                                Los registros de asistencia aparecerán aquí
+                                automáticamente
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h3 class="h5 mb-0">
+                            <i class="fas fa-question-circle me-2"></i>¿Cámara
+                            no funciona?
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex flex-column gap-2">
+                            <div class="alert alert-warning py-2 px-3 mb-2">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <small
+                                    ><strong>Problema común:</strong> El
+                                    navegador necesita permisos para acceder a
+                                    la cámara</small
+                                >
+                            </div>
+                            <div class="d-flex flex-column gap-1">
+                                <small><strong>🔧 Soluciones:</strong></small>
+                                <small
+                                    >• Permitir acceso a cámara en el
+                                    navegador</small
+                                >
+                                <small
+                                    >• Usar <strong>HTTPS</strong> (no
+                                    HTTP)</small
+                                >
+                                <small>• Probar con Chrome o Firefox</small>
+                                <small
+                                    >• Usar el botón
+                                    <span class="badge bg-warning"
+                                        >Ingreso Manual</span
+                                    ></small
+                                >
+                                <small
+                                    >• Subir imagen con
+                                    <span class="badge bg-info"
+                                        >Desde Archivo</span
+                                    ></small
+                                >
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form
+    id="attendanceForm"
+    method="POST"
+    action="{{ url_for('admin.record_attendance') }}"
+>
+    <input type="hidden" id="qrToken" name="qr_token" />
+</form>
+{% endblock %} {% block scripts %}
+<script src="https://unpkg.com/html5-qrcode" crossorigin="anonymous"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const $startButton = document.getElementById("startButton");
+        const $stopButton = document.getElementById("stopButton");
+        const $manualButton = document.getElementById("manualButton");
+        const $fileButton = document.getElementById("fileButton");
+        const $fileInput = document.getElementById("fileInput");
+        const $qrTokenInput = document.getElementById("qrToken");
+        const $form = document.getElementById("attendanceForm");
+        const $statusIndicator = document.getElementById("statusIndicator");
+        const $statusText = document.getElementById("statusText");
+        const $reader = document.getElementById("reader");
+        const $manualInput = document.getElementById("manualInput");
+        const $manualQrInput = document.getElementById("manualQrInput");
+        const $submitManualQr = document.getElementById("submitManualQr");
+        const $cameraPreview = document.getElementById("cameraPreview");
+        const $previewContainer = document.getElementById(
+            "cameraPreviewContainer",
+        );
+        const $scanBox = document.getElementById("scanBox");
+        const $scanInstructions = document.getElementById("scanInstructions");
+
+        let html5QrCode = null;
+        let cameraAvailable = false;
+
+        // Función para actualizar estado
+        function updateStatus(status, text, className = "") {
+            $statusIndicator.className = `status-indicator ${className}`;
+            $statusText.textContent = text;
+        }
+
+        // Función para procesar código QR
+        function processQR(qrText) {
+            $qrTokenInput.value = qrText;
+            $form.submit();
+        }
+
+        // Verificar disponibilidad de cámara
+        function checkCameraAvailability() {
+            if (
+                !navigator.mediaDevices ||
+                !navigator.mediaDevices.getUserMedia
+            ) {
+                showManualInput("Tu navegador no soporta acceso a cámara");
+                return;
+            }
+
+            navigator.mediaDevices
+                .getUserMedia({ video: true })
+                .then((stream) => {
+                    cameraAvailable = true;
+                    stream.getTracks().forEach((track) => track.stop());
+                    updateStatus(
+                        "ready",
+                        "Cámara disponible - Click para iniciar",
+                        "status-inactive",
+                    );
+                    $startButton.disabled = false;
+                })
+                .catch((err) => {
+                    console.log("Cámara no disponible:", err);
+                    showManualInput("Cámara no disponible en este dispositivo");
+                });
+        }
+
+        // Mostrar input manual
+        function showManualInput(reason) {
+            updateStatus("manual", reason, "status-inactive");
+            $manualInput.style.display = "block";
+            $manualButton.style.display = "inline-block";
+            $requestPermissionButton.style.display = "none";
+            $startButton.style.display = "none";
+            $previewContainer.style.display = "none";
+            $reader.style.display = "none";
+
+            // Detener preview si está activa
+            if ($cameraPreview.srcObject) {
+                $cameraPreview.srcObject
+                    .getTracks()
+                    .forEach((track) => track.stop());
+                $cameraPreview.srcObject = null;
+            }
+        }
+
+        // Evento del botón iniciar
+        $startButton.addEventListener("click", () => {
+            if (!cameraAvailable) {
+                showManualInput("Cámara no disponible");
+                return;
+            }
+
+            updateStatus(
+                "loading",
+                "Iniciando escáner QR...",
+                "status-loading",
+            );
+
+            // Detener preview y mostrar scanner
+            if ($cameraPreview.srcObject) {
+                $cameraPreview.srcObject
+                    .getTracks()
+                    .forEach((track) => track.stop());
+                $cameraPreview.srcObject = null;
+            }
+            $previewContainer.style.display = "none";
+            $reader.style.display = "block";
+
+            const config = {
+                fps: 10,
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1,
+                disableFlip: false,
+            };
+
+            html5QrCode = new Html5Qrcode("reader");
+
+            // Intentar primero cámara trasera, luego frontal como fallback
+            html5QrCode
+                .start(
+                    { facingMode: "environment" },
+                    config,
+                    processQR,
+                    (errorMessage) => {
+                        // Ignorar errores menores de escaneado
+                    },
+                )
+                .then(() => {
+                    $reader.style.display = "block";
+                    $startButton.classList.add("d-none");
+                    $stopButton.classList.remove("d-none");
+                    updateStatus(
+                        "active",
+                        "Escaneando... Enfoca el código QR",
+                        "status-active",
+                    );
+                })
+                .catch((err) => {
+                    console.log(
+                        "Error con cámara trasera, intentando frontal:",
+                        err,
+                    );
+                    // Fallback a cámara frontal
+                    html5QrCode
+                        .start(
+                            { facingMode: "user" },
+                            config,
+                            processQR,
+                            (errorMessage) => {
+                                // Ignorar errores menores
+                            },
+                        )
+                        .then(() => {
+                            $reader.style.display = "block";
+                            $startButton.classList.add("d-none");
+                            $stopButton.classList.remove("d-none");
+                            updateStatus(
+                                "active",
+                                "Escaneando con cámara frontal...",
+                                "status-active",
+                            );
+                        })
+                        .catch((err2) => {
+                            console.log("Error con ambas cámaras:", err2);
+                            showManualInput("No se pudo acceder a la cámara");
+                        });
+                });
+        });
+
+        // Evento del botón detener
+        $stopButton.addEventListener("click", () => {
+            if (html5QrCode) {
+                html5QrCode
+                    .stop()
+                    .then(() => {
+                        html5QrCode.clear();
+                        $reader.style.display = "none";
+                        $startButton.classList.remove("d-none");
+                        $stopButton.classList.add("d-none");
+                        updateStatus(
+                            "inactive",
+                            "Escáner detenido",
+                            "status-inactive",
+                        );
+                    })
+                    .catch((err) => {
+                        console.error("Error al detener el escáner:", err);
+                    });
+            }
+        });
+
+        // Evento del botón manual
+        $manualButton.addEventListener("click", () => {
+            $manualInput.style.display =
+                $manualInput.style.display === "none" ? "block" : "none";
+        });
+
+        // Evento del input manual
+        $submitManualQr.addEventListener("click", () => {
+            const qrText = $manualQrInput.value.trim();
+            if (qrText) {
+                processQR(qrText);
+            } else {
+                alert("Por favor ingresa un código QR válido");
+            }
+        });
+
+        // Evento para archivo
+        $fileButton.addEventListener("click", () => {
+            $fileInput.click();
+        });
+
+        $fileInput.addEventListener("change", (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                updateStatus(
+                    "loading",
+                    "Procesando imagen...",
+                    "status-loading",
+                );
+
+                // Crear un escáner temporal para archivos
+                const tempReader = document.createElement("div");
+                tempReader.id = "temp-reader";
+                tempReader.style.display = "none";
+                document.body.appendChild(tempReader);
+
+                const html5QrCodeScanner = new Html5Qrcode("temp-reader");
+                html5QrCodeScanner
+                    .scanFile(file, true)
+                    .then((decodedText) => {
+                        processQR(decodedText);
+                        document.body.removeChild(tempReader);
+                    })
+                    .catch((err) => {
+                        updateStatus(
+                            "inactive",
+                            "Error al leer imagen",
+                            "status-inactive",
+                        );
+                        alert(
+                            "No se pudo leer el código QR del archivo. Asegúrate de que la imagen contenga un código QR válido.",
+                        );
+                        document.body.removeChild(tempReader);
+                    });
+            }
+        });
+
+        // Evento Enter en input manual
+        $manualQrInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
+                $submitManualQr.click();
+            }
+        });
+
+        // Inicializar
+        updateStatus(
+            "checking",
+            "Verificando disponibilidad de cámara...",
+            "status-indicator",
+        );
+        checkCameraAvailability();
+
+        // Auto-iniciar en móviles después de verificar cámara
+        setTimeout(() => {
+            if (
+                cameraAvailable &&
+                /Android|iPhone|iPad/i.test(navigator.userAgent)
+            ) {
+                $startButton.click();
+            }
+        }, 2000);
+    });
+</script>
+{% endblock %}

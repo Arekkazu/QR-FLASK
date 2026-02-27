@@ -1,0 +1,256 @@
+{% extends "base.html" %} {% block content %}
+<div class="row mb-4">
+    <div class="col-md-6">
+        <h1 class="display-4">
+            <i class="fas fa-tachometer-alt me-2"></i>Panel de Administración
+        </h1>
+    </div>
+    <div class="col-md-6 text-end">
+        <button
+            class="btn btn-success"
+            data-bs-toggle="modal"
+            data-bs-target="#addUserModal"
+        >
+            <i class="fas fa-plus me-2"></i>Agregar Usuario
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h3 class="h5 mb-0">
+            <i class="fas fa-users me-2"></i>Gestión de Usuarios
+        </h3>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Usuario</th>
+                        <th>Rol</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td>{{ user.username }}</td>
+                        <td>
+                            <span
+                                class="badge bg-{{ 'success' if user.role.name == 'Admin' else 'info' }}"
+                            >
+                                {{ user.role.name }}
+                            </span>
+                        </td>
+                        <td>
+                            <button
+                                class="btn btn-sm btn-warning edit-user"
+                                data-id="{{ user.id }}"
+                                data-username="{{ user.username }}"
+                                data-role="{{ user.role.name }}"
+                            >
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button
+                                class="btn btn-sm btn-danger delete-user"
+                                data-id="{{ user.id }}"
+                            >
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para agregar usuario -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('admin.add_user') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">Agregar Nuevo Usuario</h5>
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                    ></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre de Usuario</label>
+                        <input
+                            type="text"
+                            name="username"
+                            class="form-control"
+                            required
+                        />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Contraseña</label>
+                        <input
+                            type="password"
+                            name="password"
+                            class="form-control"
+                            required
+                        />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Rol</label>
+                        <select name="role" class="form-select" required>
+                            <option value="User">Usuario</option>
+                            <option value="Admin">Administrador</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal"
+                    >
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Crear Usuario
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para editar usuario -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('admin.edit_user') }}">
+                <input type="hidden" name="user_id" id="editUserId" />
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Usuario</h5>
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                    ></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre de Usuario</label>
+                        <input
+                            type="text"
+                            name="username"
+                            id="editUsername"
+                            class="form-control"
+                            required
+                        />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label"
+                            >Contraseña (dejar vacío para no cambiar)</label
+                        >
+                        <input
+                            type="password"
+                            name="password"
+                            class="form-control"
+                        />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Rol</label>
+                        <select
+                            name="role"
+                            id="editRole"
+                            class="form-select"
+                            required
+                        >
+                            <option value="User">Usuario</option>
+                            <option value="Admin">Administrador</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal"
+                    >
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-warning">
+                        Actualizar Usuario
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para eliminar usuario -->
+<div class="modal fade" id="deleteUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('admin.delete_user') }}">
+                <input type="hidden" name="user_id" id="deleteUserId" />
+                <div class="modal-header">
+                    <h5 class="modal-title text-danger">Eliminar Usuario</h5>
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                    ></button>
+                </div>
+                <div class="modal-body">
+                    <p>
+                        ¿Está seguro de eliminar este usuario? Esta acción no se
+                        puede deshacer.
+                    </p>
+                    <p class="fw-bold text-danger">
+                        ¡Esta acción eliminará permanentemente el usuario!
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal"
+                    >
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-danger">
+                        Eliminar Usuario
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+    $(document).ready(function () {
+        // Editar usuario
+        $(".edit-user").click(function () {
+            const id = $(this).data("id");
+            const username = $(this).data("username");
+            const role = $(this).data("role");
+
+            $("#editUserId").val(id);
+            $("#editUsername").val(username);
+            $("#editRole").val(role);
+            $("#editUserModal").modal("show");
+        });
+
+        // Eliminar usuario
+        $(".delete-user").click(function () {
+            $("#deleteUserId").val($(this).data("id"));
+            $("#deleteUserModal").modal("show");
+        });
+    });
+</script>
+{% endblock %} {% endblock %}

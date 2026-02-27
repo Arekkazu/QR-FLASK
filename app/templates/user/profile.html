@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="fas fa-user-edit me-2"></i>Mi Perfil
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5>Información Actual</h5>
+                        <table class="table table-borderless">
+                            <tr>
+                                <td><strong>Usuario:</strong></td>
+                                <td>{{ user.username }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Rol:</strong></td>
+                                <td>
+                                    <span class="badge bg-{{ 'danger' if user.role.name == 'Admin' else 'primary' }}">
+                                        {{ user.role.name }}
+                                    </span>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h5>Actualizar Perfil</h5>
+                        <form method="POST" action="{{ url_for('user.update_profile') }}">
+                            <div class="mb-3">
+                                <label for="username" class="form-label">Nuevo Usuario</label>
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    id="username"
+                                    name="username"
+                                    value="{{ user.username }}"
+                                    required
+                                />
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Nueva Contraseña</label>
+                                <input
+                                    type="password"
+                                    class="form-control"
+                                    id="password"
+                                    name="password"
+                                    placeholder="Dejar vacío para mantener la actual"
+                                />
+                                <div class="form-text">
+                                    Solo ingresa una contraseña si deseas cambiarla
+                                </div>
+                            </div>
+
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-save me-2"></i>Actualizar Perfil
+                                </button>
+                                <a href="{{ url_for('user.dashboard') }}" class="btn btn-secondary">
+                                    <i class="fas fa-arrow-left me-2"></i>Volver al Dashboard
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

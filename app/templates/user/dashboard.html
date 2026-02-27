@@ -1,0 +1,189 @@
+{% extends "base.html" %} {% block head %}
+<style>
+    .qr-container {
+        background: white;
+        padding: 25px;
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        text-align: center;
+        margin: 30px auto;
+        max-width: 350px;
+        position: relative;
+        overflow: hidden;
+        border: 2px solid #0d6efd;
+    }
+    .qr-container::before {
+        content: "";
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: linear-gradient(
+            45deg,
+            transparent 33%,
+            rgba(13, 110, 253, 0.1) 50%,
+            transparent 66%
+        );
+        transform: rotate(45deg);
+        animation: scan 3s linear infinite;
+    }
+    @keyframes scan {
+        0% {
+            top: -50%;
+        }
+        100% {
+            top: 150%;
+        }
+    }
+    .qr-image {
+        max-width: 100%;
+        border-radius: 8px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+    .countdown {
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #dc3545;
+        margin-top: 15px;
+    }
+    .qr-info {
+        background: #e3f2fd;
+        border-radius: 10px;
+        padding: 15px;
+        margin-top: 20px;
+        text-align: left;
+    }
+    .qr-info p {
+        margin-bottom: 5px;
+    }
+</style>
+{% endblock %} {% block content %}
+<div class="row justify-content-center mb-4">
+    <div class="col-md-8 text-center">
+        <h1 class="display-4">
+            <i class="fas fa-user me-2"></i>Bienvenido, {{ user.username }}!
+        </h1>
+        <p class="lead text-muted">Tu código QR para registro de asistencia</p>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="qr-container">
+            <h2 class="mb-3"><i class="fas fa-qrcode me-2"></i>Tu Código QR</h2>
+            <img
+                src="data:image/png;base64,{{ qr_img }}"
+                class="qr-image"
+                alt="QR Code"
+            />
+            <p class="countdown" id="countdown">
+                Actualizando en: <span id="timer">60</span> segundos
+            </p>
+
+            <div class="qr-info mt-4">
+                <p>
+                    <i class="fas fa-info-circle me-2 text-primary"></i>Este
+                    código se actualiza cada minuto
+                </p>
+                <p>
+                    <i class="fas fa-shield-alt me-2 text-success"></i>Seguro y
+                    único para tu sesión
+                </p>
+                <p>
+                    <i class="fas fa-clock me-2 text-warning"></i>Válido solo
+                    por 60 segundos
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h3 class="h5 mb-0">
+                    <i class="fas fa-history me-2"></i>Mis Registros de
+                    Asistencia
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Hora</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>{{ now.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ now.strftime('%H:%M') }}</td>
+                                <td>
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check me-1"></i
+                                        >Registrado hoy
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>2023-10-15</td>
+                                <td>08:30</td>
+                                <td>
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check me-1"></i
+                                        >Registrado
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>2023-10-14</td>
+                                <td>08:45</td>
+                                <td>
+                                    <span class="badge bg-warning">
+                                        <i class="fas fa-clock me-1"></i>Tarde
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        let timeLeft = {{ QR_EXPIRATION }};
+        const timerElement = document.getElementById('timer');
+        const countdownElement = document.getElementById('countdown');
+
+        // Actualizar contador
+        const countdown = setInterval(() => {
+            timeLeft--;
+            timerElement.textContent = timeLeft;
+
+            if (timeLeft <= 10) {
+                countdownElement.classList.add('text-danger');
+            }
+
+            if (timeLeft <= 0) {
+                clearInterval(countdown);
+                location.reload(); // Recargar la página para obtener un nuevo QR
+            }
+        }, 1000);
+
+        // Prevenir que el usuario cierre la página accidentalmente
+        window.addEventListener('beforeunload', function(e) {
+            if (timeLeft > 0 && timeLeft < {{ QR_EXPIRATION }}) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+    });
+</script>
+{% endblock %}
