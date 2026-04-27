@@ -105,6 +105,21 @@ sudo systemctl status qr-flask
 sudo journalctl -u qr-flask -f
 ```
 
+Si el servicio no existe, revisa estos logs en la instancia para ver si `user_data` fallo durante el primer arranque:
+
+```bash
+sudo tail -n 200 /var/log/cloud-init-output.log
+sudo cat /var/lib/cloud/instance/user-data.txt
+```
+
+Importante: `user_data` solo se ejecuta cuando la instancia se crea por primera vez. Si cambiaste Terraform despues de crear la EC2, un nuevo `terraform apply` no vuelve a ejecutar ese bootstrap. En ese caso, recrea la instancia o fuerza su reemplazo:
+
+```bash
+terraform apply -replace=aws_instance.app
+```
+
+Eso volvera a correr todo el bootstrap y deberia crear `qr-flask.service`.
+
 Prueba en navegador:
 - `http://<PUBLIC_IP>:5000`
 
