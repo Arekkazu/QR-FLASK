@@ -1,0 +1,62 @@
+#!/bin/bash
+set -eux
+
+dnf update -y
+dnf install -y git python3 python3-pip
+
+APP_DIR="${deploy_path}"
+APP_USER="${app_user}"
+APP_PORT="${app_port}"
+REPO_URL="${repo_url}"
+REPO_BRANCH="${repo_branch}"
+
+mkdir -p "$APP_DIR"
+chown -R "$APP_USER":"$APP_USER" "$APP_DIR"
+
+if [ ! -d "$APP_DIR/.git" ]; then
+	sudo -u "$APP_USER" git clone --branch "$REPO_BRANCH" "$REPO_URL" "$APP_DIR"
+else
+	cd "$APP_DIR"
+	sudo -u "$APP_USER" git fetch origin
+	sudo -u "$APP_USER" git checkout "$REPO_BRANCH"
+	sudo -u "$APP_USER" git pull origin "$REPO_BRANCH"
+fi
+
+cd "$APP_DIR"
+
+sudo -u "$APP_USER" python3 -m venv "$APP_DIR/.venv"
+sudo -u "$APP_USER" "$APP_DIR/.venv/bin/pip" install --upgrade pip
+sudo -u "$APP_USER" "$APP_DIR/.venv/bin/pip" install -r requirements.txt
+
+cat >/etc/systemd/system/${project_name}.service <<EOF
+[Unit]
+Description=${project_name} Flask application
+After=network.target
+
+[Service]
+User=${app_user}
+Group=${app_user}
+WorkingDirectory=${deploy_path}
+Environment=FLASK_ENV=production
+Environment=FLASK_RUN_HOST=0.0.0.0
+Environment=FLASK_RUN_PORT=${app_port}
+ExecStart=${deploy_path}/.venv/bin/gunicorn --bind 0.0.0.0:${app_port} wsgi:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable ${project_name}
+systemctl restart ${project_name}
+
+cat >/etc/motd <<'EOF'
+QR-FLASK EC2 host ready.
+
+Next steps after SSH:
+1) sudo systemctl status ${project_name}
+2) sudo journalctl -u ${project_name} -f
+3) open http://<public-ip>:${app_port}
+EOF
