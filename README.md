@@ -183,6 +183,74 @@ sqlite3 instance/app.db
 .schema users
 ```
 
+## ☁️ Infraestructura IaC con Terraform (AWS Free Tier)
+
+Se agregó una plantilla Terraform en `infra/terraform/` para crear una instancia EC2 en AWS con tipo `t2.micro` y desplegar el proyecto automáticamente.
+
+### Recursos que crea
+
+- VPC, subred pública, Internet Gateway y tabla de rutas
+- Security Group con puertos:
+   - `22` (SSH, restringido por `ssh_cidr`)
+   - `5000` (app Flask, configurable)
+- Instancia EC2 Amazon Linux 2023 (`t2.micro` por defecto)
+- Descarga automática del repo desde `repo_url`
+- Instalación de dependencias con `pip`
+- Arranque como servicio `systemd` con `gunicorn`
+
+### 1. Prerrequisitos
+
+- Tener Terraform instalado
+- Tener AWS CLI configurado (`aws configure`)
+- Tener creado un Key Pair EC2 en tu cuenta (nombre de llave)
+- Tener acceso al repositorio Git que vas a desplegar
+
+### 2. Configurar variables
+
+```bash
+cd infra/terraform
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Editar `terraform.tfvars` y ajustar al menos:
+
+- `ssh_key_name`
+- `ssh_cidr` (recomendado `TU_IP_PUBLICA/32`)
+- `repo_url`
+- `repo_branch`
+- `project_name` si quieres cambiar el nombre del servicio
+
+### 3. Desplegar
+
+```bash
+terraform init
+terraform plan -out tfplan
+terraform apply tfplan
+```
+
+### 4. Obtener IP y conectarte
+
+```bash
+terraform output
+```
+
+Usa la salida `ssh_command` para conectarte.
+
+### 5. La app arranca sola
+
+Terraform deja un servicio `systemd` creado y activo. Si necesitas revisar el estado:
+
+```bash
+sudo systemctl status qr-flask
+sudo journalctl -u qr-flask -f
+```
+
+### 6. Eliminar infraestructura (evitar costos)
+
+```bash
+terraform destroy
+```
+
 ## 📞 Soporte
 
 Para reportar problemas o sugerir mejoras:
