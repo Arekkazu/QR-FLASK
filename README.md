@@ -187,6 +187,8 @@ sqlite3 instance/app.db
 
 Se agregó una plantilla Terraform en `infra/terraform/` para crear una instancia EC2 en AWS con tipo `t2.micro` y desplegar el proyecto automáticamente.
 
+Manual completo: `infra/terraform/README.md`
+
 ### Recursos que crea
 
 - VPC, subred pública, Internet Gateway y tabla de rutas
