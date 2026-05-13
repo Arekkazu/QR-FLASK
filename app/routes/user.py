@@ -1,116 +1,67 @@
-from datetime import datetime
+from flask import Blueprint, request, jsonify, current_app
 
-from flask import (
-    Blueprint,
-    current_app,
-    flash,
-    redirect,
-    render_template,
-    request,
-    session,
-    url_for,
-)
-
-from app.routes.auth import login_required
+from app.routes.auth import jwt_required
 from app.services.attendance_service import AttendanceService
 from app.services.qr_service import QRService
 from app.services.user_service import UserService
 
-bp = Blueprint("user", __name__, url_prefix="/user")
+bp = Blueprint("user", __name__, url_prefix="/api/user")
 
 
-def get_qr_service():
-    """Obtener instancia de QRService con la configuración actual"""
-    secret_key = current_app.config.get("QR_SECRET_KEY")
-    if not secret_key:
-        raise ValueError("QR_SECRET_KEY no está configurado")
-    return QRService(secret_key)
+def _qr_service():
+    return QRService(current_app.config["QR_SECRET_KEY"])
 
 
-@bp.route("/dashboard")
-@login_required
+@bp.route("/dashboard", methods=["GET"])
+@jwt_required
 def dashboard():
-    """Dashboard del usuario con su código QR personal"""
-    user_service = UserService()
-    user = user_service.get(session.get("user_id"))
-
+    user_id = request.current_user["sub"]
+    user = UserService().get(user_id)
     if not user:
-        flash("Usuario no encontrado", "danger")
-        return redirect(url_for("auth.login"))
+        return jsonify({"error": "Usuario no encontrado"}), 404
 
-    # Generar código QR para el usuario
-    qr_service = get_qr_service()
-    qr_data = qr_service.create_qr_data(user.id)
-
-    return render_template(
-        "user/dashboard.html",
-        title="Mi Dashboard",
-        user=user,
-        qr_token=qr_data["token"],
-        qr_img=qr_data["image"],
-        QR_EXPIRATION=current_app.config.get("QR_EXPIRATION", 60),
-    )
+    qr_data = _qr_service().create_qr_data(user.id)
+    return jsonify({
+        "username": user.username,
+        "role": user.role.name,
+        "qr_token": qr_data["token"],
+        "qr_img": qr_data["image"],
+        "qr_expiration": current_app.config["QR_EXPIRATION"],
+    })
 
 
-@bp.route("/attendance")
-@login_required
+@bp.route("/attendance", methods=["GET"])
+@jwt_required
 def attendance():
-    """Historial de asistencias del usuario"""
-    user_service = UserService()
-    attendance_service = AttendanceService()
-
-    user = user_service.get(session.get("user_id"))
-
-    if not user:
-        flash("Usuario no encontrado", "danger")
-        return redirect(url_for("auth.login"))
-
-    # Obtener historial de asistencias
-    attendance_history = attendance_service.get_user_attendance(user.id)
-
-    return render_template(
-        "user/attendance.html",
-        title="Mi Asistencia",
-        user=user,
-        attendance_history=attendance_history,
-    )
+    user_id = request.current_user["sub"]
+    records = AttendanceService().get_user_attendance(user_id)
+    return jsonify([
+        {"id": r.id, "timestamp": r.timestamp.isoformat()}
+        for r in records
+    ])
 
 
-@bp.route("/profile")
-@login_required
+@bp.route("/profile", methods=["GET"])
+@jwt_required
 def profile():
-    """Perfil del usuario"""
-    user_service = UserService()
-    user = user_service.get(session.get("user_id"))
-
+    user = UserService().get(request.current_user["sub"])
     if not user:
-        flash("Usuario no encontrado", "danger")
-        return redirect(url_for("auth.login"))
-
-    return render_template("user/profile.html", title="Mi Perfil", user=user)
+        return jsonify({"error": "Usuario no encontrado"}), 404
+    return jsonify({"id": user.id, "username": user.username, "role": user.role.name})
 
 
-@bp.route("/update_profile", methods=["POST"])
-@login_required
+@bp.route("/profile", methods=["PUT"])
+@jwt_required
 def update_profile():
-    """Actualizar perfil del usuario"""
-    user_service = UserService()
-    user_id = session.get("user_id")
-
-    username = request.form.get("username")
-    password = request.form.get("password")
-
+    data = request.get_json(silent=True) or {}
+    user_id = request.current_user["sub"]
+    kwargs = {}
+    if data.get("username"):
+        kwargs["username"] = data["username"]
+    if data.get("password"):
+        kwargs["password"] = data["password"]
     try:
-        kwargs = {"username": username}
-        if password:
-            kwargs["password"] = password
-
-        user_service.update(user_id, **kwargs)
-        flash("Perfil actualizado exitosamente", "success")
+        UserService().update(user_id, **kwargs)
+        return jsonify({"message": "Perfil actualizado"})
     except ValueError as e:
-        flash(str(e), "danger")
-    except Exception as e:
-        current_app.logger.error(f"Error al actualizar perfil: {e}")
-        flash("Error al actualizar perfil. Intente nuevamente.", "danger")
-
-    return redirect(url_for("user.profile"))
+        return jsonify({"error": str(e)}), 400
