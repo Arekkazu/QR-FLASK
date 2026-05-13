@@ -66,6 +66,14 @@ resource "aws_security_group" "ec2" {
   }
 
   ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
     description = "Flask app"
     from_port   = var.app_port
     to_port     = var.app_port
