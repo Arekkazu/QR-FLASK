@@ -90,7 +90,7 @@ def edit_user(user_id):
 @bp.route("/users/<int:user_id>", methods=["DELETE"])
 @admin_required
 def delete_user(user_id):
-    caller_id = request.current_user["sub"]
+    caller_id = int(request.current_user["sub"])
     if user_id == caller_id:
         return jsonify({"error": "No puedes eliminar tu propia cuenta"}), 400
     if user_service.is_last_admin(user_id):

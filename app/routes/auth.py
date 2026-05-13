@@ -13,7 +13,7 @@ user_service = UserService()
 def _make_token(user):
     cfg = current_app.config
     payload = {
-        "sub": user.id,
+        "sub": str(user.id),
         "username": user.username,
         "role": user.role.name,
         "exp": datetime.now(timezone.utc) + timedelta(hours=cfg["JWT_EXPIRATION_HOURS"]),
@@ -45,10 +45,20 @@ def jwt_required(f):
 
 def admin_required(f):
     @wraps(f)
-    @jwt_required
     def decorated(*args, **kwargs):
-        if request.current_user.get("role") != "Admin":
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Token requerido"}), 401
+        token = auth_header.split(" ", 1)[1]
+        try:
+            payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token expirado"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Token inválido"}), 401
+        if payload.get("role") != "Admin":
             return jsonify({"error": "Acceso denegado"}), 403
+        request.current_user = payload
         return f(*args, **kwargs)
     return decorated
 

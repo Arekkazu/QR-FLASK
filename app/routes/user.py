@@ -15,7 +15,7 @@ def _qr_service():
 @bp.route("/dashboard", methods=["GET"])
 @jwt_required
 def dashboard():
-    user_id = request.current_user["sub"]
+    user_id = int(request.current_user["sub"])
     user = UserService().get(user_id)
     if not user:
         return jsonify({"error": "Usuario no encontrado"}), 404
@@ -33,7 +33,7 @@ def dashboard():
 @bp.route("/attendance", methods=["GET"])
 @jwt_required
 def attendance():
-    user_id = request.current_user["sub"]
+    user_id = int(request.current_user["sub"])
     records = AttendanceService().get_user_attendance(user_id)
     return jsonify([
         {"id": r.id, "timestamp": r.timestamp.isoformat()}
@@ -44,7 +44,7 @@ def attendance():
 @bp.route("/profile", methods=["GET"])
 @jwt_required
 def profile():
-    user = UserService().get(request.current_user["sub"])
+    user = UserService().get(int(request.current_user["sub"]))
     if not user:
         return jsonify({"error": "Usuario no encontrado"}), 404
     return jsonify({"id": user.id, "username": user.username, "role": user.role.name})
@@ -54,7 +54,7 @@ def profile():
 @jwt_required
 def update_profile():
     data = request.get_json(silent=True) or {}
-    user_id = request.current_user["sub"]
+    user_id = int(request.current_user["sub"])
     kwargs = {}
     if data.get("username"):
         kwargs["username"] = data["username"]
