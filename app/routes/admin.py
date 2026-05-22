@@ -8,24 +8,19 @@ from flask import (
     current_app,
     session,
 )
+
 from app.routes.auth import admin_required
-from app.services.user_service import UserService
 from app.services.attendance_service import AttendanceService
 from app.services.qr_service import QRService
+from app.services.user_service import UserService
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
-
-# Inicializar servicios que no dependen de current_app
 user_service = UserService()
 attendance_service = AttendanceService()
 
 
-def get_qr_service():
-    """Obtener instancia de QRService con la configuración actual"""
-    secret_key = current_app.config.get("QR_SECRET_KEY")
-    if not secret_key:
-        raise ValueError("QR_SECRET_KEY no está configurado")
-    return QRService(secret_key)
+def _qr_service():
+    return QRService(current_app.config["QR_SECRET_KEY"])
 
 
 @bp.route("/dashboard")
@@ -40,7 +35,6 @@ def dashboard():
 @bp.route("/scanner")
 @admin_required
 def scanner():
-    # Obtener los últimos registros para mostrar en la vista
     try:
         recent_attendances = attendance_service.get_recent(10)
     except Exception:
@@ -57,11 +51,8 @@ def scanner():
 @admin_required
 def record_attendance():
     qr_token = request.form["qr_token"]
-    qr_service = get_qr_service()
 
-    # Validar token con el servicio QR
-    user_id = qr_service.validate_qr_data(qr_token)
-
+    user_id = _qr_service().validate_qr_data(qr_token)
     if not user_id:
         flash(
             "Token QR inválido o expirado. Por favor, solicita un nuevo código.",
@@ -69,15 +60,13 @@ def record_attendance():
         )
         return redirect(url_for("admin.scanner"))
 
-    # Obtener usuario
     user = user_service.get(user_id)
     if not user:
         flash("Usuario no encontrado", "danger")
         return redirect(url_for("admin.scanner"))
 
     try:
-        # Intentar registrar asistencia
-        attendance = attendance_service.create(user_id)
+        attendance_service.create(user_id)
         flash(f"✅ Asistencia registrada exitosamente para {user.username}!", "success")
     except ValueError as e:
         flash(str(e), "warning")
@@ -88,7 +77,7 @@ def record_attendance():
     return redirect(url_for("admin.scanner"))
 
 
-@bp.route("/add_user", methods=["POST"])
+@bp.route("/users", methods=["POST"])
 @admin_required
 def add_user():
     username = request.form.get("username")
@@ -100,7 +89,6 @@ def add_user():
         return redirect(url_for("admin.dashboard"))
 
     try:
-        # Crear usuario con el servicio
         user = user_service.create(username, password, role_name)
         flash(
             f'Usuario "{user.username}" creado exitosamente como {role_name}', "success"
@@ -128,7 +116,6 @@ def edit_user():
 
     try:
         user_id = int(user_id_str)
-        # Actualizar usuario con el servicio
         kwargs = {"username": username}
         if password:
             kwargs["password"] = password
@@ -157,19 +144,16 @@ def delete_user():
 
     try:
         user_id = int(user_id_str)
-        # No permitir eliminar al usuario actual
         if user_id == session.get("user_id"):
             flash(
                 "No puedes eliminar tu propia cuenta mientras estás conectado", "danger"
             )
             return redirect(url_for("admin.dashboard"))
 
-        # Verificar si es el único admin
         if user_service.is_last_admin(user_id):
             flash("No puedes eliminar el único administrador del sistema", "danger")
             return redirect(url_for("admin.dashboard"))
 
-        # Eliminar usuario
         user_service.delete(user_id)
         flash("Usuario eliminado permanentemente", "success")
     except ValueError as e:

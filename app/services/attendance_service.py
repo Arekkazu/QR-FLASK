@@ -1,3 +1,4 @@
+from typing import Optional, List
 from app.services.base_service import BaseService
 from app.models.attendance import Attendance
 from app.models.user import User
@@ -25,11 +26,11 @@ class AttendanceService(BaseService):
         db.session.commit()
         return attendance
 
-    def get(self, attendance_id: int) -> Attendance | None:
+    def get(self, attendance_id: int) -> Optional[Attendance]:
         """Obtener un registro de asistencia por ID"""
         return Attendance.query.get(attendance_id)
 
-    def get_all(self) -> list[Attendance]:
+    def get_all(self) -> List[Attendance]:
         """Obtener todos los registros de asistencia"""
         return Attendance.query.all()
 
@@ -55,11 +56,11 @@ class AttendanceService(BaseService):
         db.session.delete(attendance)
         db.session.commit()
 
-    def get_for_user_on_date(self, user_id: int, date_obj: date) -> Attendance | None:
+    def get_for_user_on_date(self, user_id: int, date_obj: date) -> Optional[Attendance]:
         """Obtener asistencia de un usuario en una fecha específica"""
         return Attendance.query.filter_by(user_id=user_id, date=date_obj).first()
 
-    def get_user_attendance(self, user_id: int) -> list[Attendance]:
+    def get_user_attendance(self, user_id: int) -> List[Attendance]:
         """Obtener historial de asistencias de un usuario"""
         return (
             Attendance.query.filter_by(user_id=user_id)

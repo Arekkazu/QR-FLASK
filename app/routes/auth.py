@@ -1,84 +1,89 @@
+from datetime import datetime, timezone, timedelta
 from functools import wraps
 
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+import jwt
+from flask import Blueprint, request, jsonify, current_app
 
 from app.services.user_service import UserService
 
-bp = Blueprint("auth", __name__, url_prefix="/auth")
-
-# Inicializar servicio
+bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 user_service = UserService()
 
 
-@bp.route("/")
-def root():
-    """Redirigir a la página de login"""
-    return redirect(url_for("auth.login"))
+def _make_token(user):
+    cfg = current_app.config
+    payload = {
+        "sub": str(user.id),
+        "username": user.username,
+        "role": user.role.name,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=cfg["JWT_EXPIRATION_HOURS"]),
+    }
+    return jwt.encode(payload, cfg["JWT_SECRET_KEY"], algorithm="HS256")
 
 
-# Decoradores de autenticación
-def login_required(f):
+def jwt_required(f):
     @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if "user_id" not in session:
-            flash("Por favor, inicia sesión para acceder", "warning")
-            return redirect(url_for("auth.login"))
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Token requerido"}), 401
+        token = auth_header.split(" ", 1)[1]
+        try:
+            payload = jwt.decode(
+                token,
+                current_app.config["JWT_SECRET_KEY"],
+                algorithms=["HS256"],
+            )
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token expirado"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Token inválido"}), 401
+        request.current_user = payload
         return f(*args, **kwargs)
-
-    return decorated_function
+    return decorated
 
 
 def admin_required(f):
     @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if "user_id" not in session:
-            flash("Por favor, inicia sesión para acceder", "warning")
-            return redirect(url_for("auth.login"))
-
-        user = user_service.get(session["user_id"])
-        if not user or user.role.name != "Admin":
-            flash("Acceso denegado. Requiere permisos de administrador.", "danger")
-            return redirect(url_for("user.dashboard"))
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Token requerido"}), 401
+        token = auth_header.split(" ", 1)[1]
+        try:
+            payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token expirado"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Token inválido"}), 401
+        if payload.get("role") != "Admin":
+            return jsonify({"error": "Acceso denegado"}), 403
+        request.current_user = payload
         return f(*args, **kwargs)
+    return decorated
 
-    return decorated_function
 
-
-@bp.route("/login", methods=["GET", "POST"])
+@bp.route("/login", methods=["POST"])
 def login():
-    if "user_id" in session:
-        return redirect(
-            url_for(
-                "admin.dashboard"
-                if session.get("role") == "Admin"
-                else "user.dashboard"
-            )
-        )
+    data = request.get_json(silent=True) or {}
+    username = data.get("username", "").strip()
+    password = data.get("password", "")
 
-    if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-        user = user_service.find_by_username(username)
+    if not username or not password:
+        return jsonify({"error": "Usuario y contraseña requeridos"}), 400
 
-        if user and user.check_password(password):
-            session["user_id"] = user.id
-            session["username"] = user.username
-            session["role"] = user.role.name
+    user = user_service.find_by_username(username)
+    if not user or not user.check_password(password):
+        return jsonify({"error": "Usuario o contraseña incorrectos"}), 401
 
-            flash(f"¡Bienvenido, {user.username}!", "success")
-            return redirect(
-                url_for(
-                    "admin.dashboard" if user.role.name == "Admin" else "user.dashboard"
-                )
-            )
-
-        flash("Usuario o contraseña incorrectos", "danger")
-
-    return render_template("login.html", title="Iniciar Sesión")
+    return jsonify({
+        "token": _make_token(user),
+        "username": user.username,
+        "role": user.role.name,
+    })
 
 
-@bp.route("/logout")
-def logout():
-    session.clear()
-    flash("Has cerrado sesión correctamente", "success")
-    return redirect(url_for("auth.login"))
+@bp.route("/me", methods=["GET"])
+@jwt_required
+def me():
+    return jsonify(request.current_user)
