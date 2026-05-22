@@ -40,7 +40,17 @@ def dashboard():
 @bp.route("/scanner")
 @admin_required
 def scanner():
-    return render_template("admin/scanner.html", title="Registrar Asistencia")
+    # Obtener los últimos registros para mostrar en la vista
+    try:
+        recent_attendances = attendance_service.get_recent(10)
+    except Exception:
+        recent_attendances = []
+
+    return render_template(
+        "admin/scanner.html",
+        title="Registrar Asistencia",
+        recent_attendances=recent_attendances,
+    )
 
 
 @bp.route("/record_attendance", methods=["POST"])

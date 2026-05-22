@@ -33,6 +33,12 @@ class AttendanceService(BaseService):
         """Obtener todos los registros de asistencia"""
         return Attendance.query.all()
 
+    def get_recent(self, limit: int = 10) -> list[Attendance]:
+        """Obtener los registros más recientes (por timestamp desc)"""
+        return (
+            Attendance.query.order_by(Attendance.timestamp.desc()).limit(limit).all()
+        )
+
     def update(self, attendance_id: int, **kwargs) -> None:
         """Actualizar un registro de asistencia existente"""
         # No se permite actualizar un registro de asistencia

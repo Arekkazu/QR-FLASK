@@ -14,6 +14,9 @@
         padding: 20px;
         background: #e9ecef;
         border-radius: 15px;
+                <button id="requestPermissionButton" class="btn btn-secondary" style="display: none">
+                    <i class="fas fa-lock-open me-2"></i>Permitir Cámara
+                </button>
         margin: 20px auto;
         max-width: 600px;
     }
@@ -276,7 +279,22 @@
                             <i class="fas fa-history me-2"></i>Últimos Registros
                         </h3>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body p-0">
+                        {% if recent_attendances and recent_attendances|length > 0 %}
+                        <ul class="list-group list-group-flush">
+                            {% for a in recent_attendances %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ a.user.username if a.user else 'Usuario' }}</strong>
+                                    <div class="small text-muted">
+                                        {{ a.timestamp|to_localtime('%d/%m/%Y - %H:%M:%S') }}
+                                    </div>
+                                </div>
+                                <span class="badge bg-success rounded-pill">Registrado</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
                         <div
                             class="d-flex justify-content-center align-items-center"
                             style="height: 150px"
@@ -286,6 +304,7 @@
                                 automáticamente
                             </p>
                         </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -367,11 +386,15 @@
         const $previewContainer = document.getElementById(
             "cameraPreviewContainer",
         );
+        const $requestPermissionButton = document.getElementById("requestPermissionButton");
         const $scanBox = document.getElementById("scanBox");
         const $scanInstructions = document.getElementById("scanInstructions");
 
         let html5QrCode = null;
         let cameraAvailable = false;
+
+        // Deshabilitar iniciar hasta verificar disponibilidad
+        $startButton.disabled = true;
 
         // Función para actualizar estado
         function updateStatus(status, text, className = "") {
@@ -418,7 +441,10 @@
             updateStatus("manual", reason, "status-inactive");
             $manualInput.style.display = "block";
             $manualButton.style.display = "inline-block";
-            $requestPermissionButton.style.display = "none";
+            // Mostrar botón para que el usuario intente conceder permiso manualmente
+            if ($requestPermissionButton) {
+                $requestPermissionButton.style.display = "inline-block";
+            }
             $startButton.style.display = "none";
             $previewContainer.style.display = "none";
             $reader.style.display = "none";
@@ -543,6 +569,28 @@
             $manualInput.style.display =
                 $manualInput.style.display === "none" ? "block" : "none";
         });
+
+        // Evento del botón solicitar permiso (user gesture)
+        if ($requestPermissionButton) {
+            $requestPermissionButton.addEventListener("click", () => {
+                updateStatus("loading", "Solicitando permiso de cámara...", "status-loading");
+                navigator.mediaDevices
+                    .getUserMedia({ video: true })
+                    .then((stream) => {
+                        // Si se concede permiso, detener track y habilitar start
+                        stream.getTracks().forEach((t) => t.stop());
+                        cameraAvailable = true;
+                        $startButton.disabled = false;
+                        updateStatus("ready", "Cámara disponible - Click para iniciar", "status-inactive");
+                        $requestPermissionButton.style.display = "none";
+                        $manualInput.style.display = "none";
+                    })
+                    .catch((err) => {
+                        console.error("Permiso denegado o error:", err);
+                        updateStatus("inactive", "Permiso denegado o cámara no disponible", "status-inactive");
+                    });
+            });
+        }
 
         // Evento del input manual
         $submitManualQr.addEventListener("click", () => {

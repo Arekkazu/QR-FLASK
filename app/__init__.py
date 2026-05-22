@@ -45,6 +45,22 @@ def create_app(config_name=None):
 
         return dict(now=datetime.now())
 
+    # Filtro para convertir timestamps UTC a hora local del servidor
+    def to_localtime(dt, fmt="%d/%m/%Y - %H:%M:%S"):
+        if not dt:
+            return ""
+        import datetime as _dt
+
+        # Si es naive, asumimos UTC
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=_dt.timezone.utc)
+
+        local_tz = _dt.datetime.now().astimezone().tzinfo
+        local_dt = dt.astimezone(local_tz)
+        return local_dt.strftime(fmt)
+
+    app.jinja_env.filters["to_localtime"] = to_localtime
+
     # Ruta raíz que redirige al login
     @app.route("/")
     def index():
