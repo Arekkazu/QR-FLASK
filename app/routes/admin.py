@@ -33,8 +33,21 @@ def scanner():
         recent_attendances = attendance_service.get_recent(10)
     except Exception:
         recent_attendances = []
+    results = []
+    for attendance in recent_attendances:
+        try:
+            user = user_service.get(attendance.user_id)
+        except Exception:
+            user = None
 
-    return jsonify([attendance.to_dict() for attendance in recent_attendances])
+        results.append(
+            {
+                "attendance": attendance.to_dict(),
+                "user": user.to_dict() if user else None,
+            }
+        )
+
+    return jsonify(results)
 
 
 @bp.route("/record_attendance", methods=["POST"])
