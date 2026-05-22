@@ -1,12 +1,8 @@
 from flask import (
     Blueprint,
-    render_template,
+    jsonify,
     request,
-    redirect,
-    url_for,
-    flash,
     current_app,
-    session,
 )
 
 from app.routes.auth import admin_required
@@ -14,7 +10,7 @@ from app.services.attendance_service import AttendanceService
 from app.services.qr_service import QRService
 from app.services.user_service import UserService
 
-bp = Blueprint("admin", __name__, url_prefix="/admin")
+bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 user_service = UserService()
 attendance_service = AttendanceService()
 
@@ -27,9 +23,7 @@ def _qr_service():
 @admin_required
 def dashboard():
     users = user_service.get_all()
-    return render_template(
-        "admin/dashboard.html", users=users, title="Panel de Administración"
-    )
+    return jsonify([user.to_dict() for user in users])
 
 
 @bp.route("/scanner")
@@ -40,82 +34,74 @@ def scanner():
     except Exception:
         recent_attendances = []
 
-    return render_template(
-        "admin/scanner.html",
-        title="Registrar Asistencia",
-        recent_attendances=recent_attendances,
-    )
+    return jsonify([attendance.to_dict() for attendance in recent_attendances])
 
 
 @bp.route("/record_attendance", methods=["POST"])
 @admin_required
 def record_attendance():
-    qr_token = request.form["qr_token"]
+    payload = request.get_json(silent=True) or request.form or {}
+    qr_token = payload.get("qr_token")
+
+    if not qr_token:
+        return jsonify({"error": "qr_token es requerido"}), 400
 
     user_id = _qr_service().validate_qr_data(qr_token)
     if not user_id:
-        flash(
-            "Token QR inválido o expirado. Por favor, solicita un nuevo código.",
-            "danger",
-        )
-        return redirect(url_for("admin.scanner"))
+        return jsonify(
+            {"error": "Token QR inválido o expirado. Por favor, solicita un nuevo código."}
+        ), 400
 
     user = user_service.get(user_id)
     if not user:
-        flash("Usuario no encontrado", "danger")
-        return redirect(url_for("admin.scanner"))
+        return jsonify({"error": "Usuario no encontrado"}), 404
 
     try:
-        attendance_service.create(user_id)
-        flash(f"✅ Asistencia registrada exitosamente para {user.username}!", "success")
+        attendance = attendance_service.create(user_id)
+        return jsonify(
+            {
+                "message": f"Asistencia registrada exitosamente para {user.username}",
+                "attendance": attendance.to_dict(),
+                "user": user.to_dict(),
+            }
+        )
     except ValueError as e:
-        flash(str(e), "warning")
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         current_app.logger.error(f"Error al registrar asistencia: {e}")
-        flash("Error al registrar asistencia. Intente nuevamente.", "danger")
-
-    return redirect(url_for("admin.scanner"))
+        return jsonify({"error": "Error al registrar asistencia. Intente nuevamente."}), 500
 
 
 @bp.route("/users", methods=["POST"])
 @admin_required
 def add_user():
-    username = request.form.get("username")
-    password = request.form.get("password")
-    role_name = request.form.get("role")
+    payload = request.get_json(silent=True) or request.form or {}
+    username = payload.get("username")
+    password = payload.get("password")
+    role_name = payload.get("role")
 
     if not all([username, password, role_name]):
-        flash("Todos los campos son requeridos", "danger")
-        return redirect(url_for("admin.dashboard"))
+        return jsonify({"error": "Todos los campos son requeridos"}), 400
 
     try:
         user = user_service.create(username, password, role_name)
-        flash(
-            f'Usuario "{user.username}" creado exitosamente como {role_name}', "success"
-        )
+        return jsonify({"message": "Usuario creado exitosamente", "user": user.to_dict()})
     except ValueError as e:
-        flash(str(e), "danger")
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         current_app.logger.error(f"Error al crear usuario: {e}")
-        flash("Error al crear usuario. Intente nuevamente.", "danger")
-
-    return redirect(url_for("admin.dashboard"))
+        return jsonify({"error": "Error al crear usuario. Intente nuevamente."}), 500
 
 
-@bp.route("/edit_user", methods=["POST"])
+@bp.route("/users/<int:user_id>", methods=["PUT"])
 @admin_required
-def edit_user():
-    user_id_str = request.form.get("user_id")
-    username = request.form.get("username")
-    password = request.form.get("password")
-    role_name = request.form.get("role")
-
-    if not user_id_str:
-        flash("ID de usuario requerido", "danger")
-        return redirect(url_for("admin.dashboard"))
+def edit_user(user_id):
+    payload = request.get_json(silent=True) or request.form or {}
+    username = payload.get("username")
+    password = payload.get("password")
+    role_name = payload.get("role") or payload.get("role_name")
 
     try:
-        user_id = int(user_id_str)
         kwargs = {"username": username}
         if password:
             kwargs["password"] = password
@@ -123,43 +109,31 @@ def edit_user():
             kwargs["role_name"] = role_name
 
         updated_user = user_service.update(user_id, **kwargs)
-        flash(f'Usuario "{updated_user.username}" actualizado exitosamente', "success")
+        return jsonify({"message": "Usuario actualizado exitosamente", "user": updated_user.to_dict()})
     except ValueError as e:
-        flash(str(e), "danger")
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         current_app.logger.error(f"Error al actualizar usuario: {e}")
-        flash("Error al actualizar usuario. Intente nuevamente.", "danger")
-
-    return redirect(url_for("admin.dashboard"))
+        return jsonify({"error": "Error al actualizar usuario. Intente nuevamente."}), 500
 
 
-@bp.route("/delete_user", methods=["POST"])
+@bp.route("/users/<int:user_id>", methods=["DELETE"])
 @admin_required
-def delete_user():
-    user_id_str = request.form.get("user_id")
-
-    if not user_id_str:
-        flash("ID de usuario requerido", "danger")
-        return redirect(url_for("admin.dashboard"))
+def delete_user(user_id):
+    from app.routes.auth import get_current_user
 
     try:
-        user_id = int(user_id_str)
-        if user_id == session.get("user_id"):
-            flash(
-                "No puedes eliminar tu propia cuenta mientras estás conectado", "danger"
-            )
-            return redirect(url_for("admin.dashboard"))
+        current_user = get_current_user()
+        if current_user and user_id == current_user.id:
+            return jsonify({"error": "No puedes eliminar tu propia cuenta mientras estás conectado"}), 400
 
         if user_service.is_last_admin(user_id):
-            flash("No puedes eliminar el único administrador del sistema", "danger")
-            return redirect(url_for("admin.dashboard"))
+            return jsonify({"error": "No puedes eliminar el único administrador del sistema"}), 400
 
         user_service.delete(user_id)
-        flash("Usuario eliminado permanentemente", "success")
+        return jsonify({"message": "Usuario eliminado permanentemente"})
     except ValueError as e:
-        flash(str(e), "danger")
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         current_app.logger.error(f"Error al eliminar usuario: {e}")
-        flash("Error al eliminar usuario. Intente nuevamente.", "danger")
-
-    return redirect(url_for("admin.dashboard"))
+        return jsonify({"error": "Error al eliminar usuario. Intente nuevamente."}), 500

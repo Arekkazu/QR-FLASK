@@ -1,5 +1,5 @@
 import os
-from flask import Flask
+from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 
@@ -46,12 +46,9 @@ def create_app(config_name=None):
 
     app.jinja_env.filters["to_localtime"] = to_localtime
 
-    # Ruta raíz que redirige al login
     @app.route("/")
     def index():
-        from flask import redirect, url_for
-
-        return redirect(url_for("auth.login"))
+        return jsonify({"status": "ok", "message": "QR-FLASK API"})
 
     # Crear tablas y datos iniciales al inicializar la aplicación
     with app.app_context():

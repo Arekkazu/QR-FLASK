@@ -2,7 +2,7 @@
 set -eux
 
 dnf update -y
-dnf install -y git python3 python3-pip nginx openssl
+dnf install -y git python3 python3-pip nginx
 
 APP_DIR="${deploy_path}"
 APP_USER="${app_user}"
@@ -50,31 +50,17 @@ systemctl daemon-reload
 systemctl enable ${project_name}
 systemctl restart ${project_name}
 
-# Certificado autofirmado
-mkdir -p /etc/nginx/ssl
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout /etc/nginx/ssl/nginx.key \
-  -out /etc/nginx/ssl/nginx.crt \
-  -subj "/C=CO/ST=Local/L=Local/O=QRFlask/CN=${project_name}"
-
-# Nginx: proxy HTTPS → gunicorn
+# Nginx: proxy HTTP → gunicorn
 cat >/etc/nginx/conf.d/${project_name}.conf <<'NGINXEOF'
 server {
-    listen 443 ssl;
-    ssl_certificate     /etc/nginx/ssl/nginx.crt;
-    ssl_certificate_key /etc/nginx/ssl/nginx.key;
+  listen 80;
 
-    location / {
-        proxy_pass http://127.0.0.1:APP_PORT_PLACEHOLDER;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-Proto https;
+  location / {
+    proxy_pass http://127.0.0.1:APP_PORT_PLACEHOLDER;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto http;
     }
-}
-
-server {
-    listen 80;
-    return 301 https://$host$request_uri;
 }
 NGINXEOF
 
