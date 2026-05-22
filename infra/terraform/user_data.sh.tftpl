@@ -37,7 +37,11 @@ After=network.target
 User=${app_user}
 Group=${app_user}
 WorkingDirectory=${deploy_path}
+# ── AQUÍ INYECTAMOS LAS VARIABLES PARA PRODUCCIÓN ──
 Environment=FLASK_ENV=production
+Environment=DATABASE_URL=${db_url}
+Environment=CORS_ORIGINS=*
+# ──────────────────────────────────────────────────
 ExecStart=${deploy_path}/.venv/bin/gunicorn --bind 127.0.0.1:${app_port} wsgi:app
 Restart=always
 RestartSec=5

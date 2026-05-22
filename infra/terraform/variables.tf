@@ -11,7 +11,7 @@ variable "aws_region" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type. For free tier, use t2.micro"
+  description = "EC2 instance type"
   type        = string
   default     = "t2.micro"
 }
@@ -27,7 +27,7 @@ variable "ssh_cidr" {
 }
 
 variable "app_port" {
-  description = "Port exposed by the Flask app"
+  description = "Port exposed by the Flask app (internal, behind Nginx)"
   type        = number
   default     = 5000
 }
@@ -53,4 +53,29 @@ variable "app_user" {
   description = "Linux user that will own the application files"
   type        = string
   default     = "ec2-user"
+}
+
+# RDS
+variable "db_name" {
+  description = "MySQL database name"
+  type        = string
+  default     = "qrflask"
+}
+
+variable "db_username" {
+  description = "MySQL master username"
+  type        = string
+  default     = "admin"
+}
+
+variable "db_password" {
+  description = "MySQL master password (min 8 chars)"
+  type        = string
+  sensitive   = true
+}
+
+variable "db_instance_class" {
+  description = "RDS instance class (free tier: db.t3.micro)"
+  type        = string
+  default     = "db.t3.micro"
 }

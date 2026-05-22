@@ -14,6 +14,6 @@ output "ssh_command" {
 }
 
 output "app_url" {
-  description = "URL to access the Flask app"
-  value       = "http://${aws_instance.app.public_ip}:${var.app_port}"
+  description = "URL real para acceder a la API del Flask Backend mediante HTTPS"
+  value       = "https://${aws_instance.app.public_ip}"
 }

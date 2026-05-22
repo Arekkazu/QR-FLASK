@@ -100,3 +100,21 @@ def delete_user(user_id):
         return jsonify({"message": "Usuario eliminado"})
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
+
+
+@bp.route("/attendance_logs", methods=["GET"])
+@admin_required
+def get_attendance_logs():
+    attendances = attendance_service.get_all()
+    # Sort by timestamp descending so the newest are at the top
+    attendances.sort(key=lambda x: x.timestamp, reverse=True)
+    return jsonify([
+        {
+            "id": a.id,
+            "username": a.user.username if a.user else "Desconocido",
+            "role": a.user.role.name if a.user and a.user.role else "Desconocido",
+            "date": a.date.isoformat() if a.date else None,
+            "timestamp": a.timestamp.isoformat() if a.timestamp else None
+        }
+        for a in attendances
+    ])
