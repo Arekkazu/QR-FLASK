@@ -1,67 +1,84 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, session
 
-from app.routes.auth import jwt_required
+from app.routes.auth import login_required
 from app.services.attendance_service import AttendanceService
 from app.services.qr_service import QRService
 from app.services.user_service import UserService
 
-bp = Blueprint("user", __name__, url_prefix="/api/user")
+bp = Blueprint("user", __name__, url_prefix="/user")
+
+user_service = UserService()
+attendance_service = AttendanceService()
 
 
 def _qr_service():
     return QRService(current_app.config["QR_SECRET_KEY"])
 
 
-@bp.route("/dashboard", methods=["GET"])
-@jwt_required
+@bp.route("/dashboard")
+@login_required
 def dashboard():
-    user_id = int(request.current_user["sub"])
-    user = UserService().get(user_id)
+    user_id = session.get("user_id")
+    user = user_service.get(user_id)
     if not user:
-        return jsonify({"error": "Usuario no encontrado"}), 404
+        flash("Usuario no encontrado", "danger")
+        return redirect(url_for("auth.login"))
 
     qr_data = _qr_service().create_qr_data(user.id)
-    return jsonify({
-        "username": user.username,
-        "role": user.role.name,
-        "qr_token": qr_data["token"],
-        "qr_img": qr_data["image"],
-        "qr_expiration": current_app.config["QR_EXPIRATION"],
-    })
+    return render_template(
+        "user/dashboard.html",
+        user=user,
+        qr_img=qr_data["image"],
+        QR_EXPIRATION=current_app.config["QR_EXPIRATION"],
+        title="Panel de Usuario",
+    )
 
 
-@bp.route("/attendance", methods=["GET"])
-@jwt_required
+@bp.route("/attendance")
+@login_required
 def attendance():
-    user_id = int(request.current_user["sub"])
-    records = AttendanceService().get_user_attendance(user_id)
-    return jsonify([
-        {"id": r.id, "timestamp": r.timestamp.isoformat()}
-        for r in records
-    ])
+    user_id = session.get("user_id")
+    attendance_history = attendance_service.get_user_attendance(user_id)
+    return render_template(
+        "user/attendance.html",
+        attendance_history=attendance_history,
+        title="Mis Asistencias",
+    )
 
 
-@bp.route("/profile", methods=["GET"])
-@jwt_required
+@bp.route("/profile")
+@login_required
 def profile():
-    user = UserService().get(int(request.current_user["sub"]))
+    user_id = session.get("user_id")
+    user = user_service.get(user_id)
     if not user:
-        return jsonify({"error": "Usuario no encontrado"}), 404
-    return jsonify({"id": user.id, "username": user.username, "role": user.role.name})
+        flash("Usuario no encontrado", "danger")
+        return redirect(url_for("auth.login"))
+
+    return render_template("user/profile.html", user=user, title="Mi Perfil")
 
 
-@bp.route("/profile", methods=["PUT"])
-@jwt_required
+@bp.route("/update_profile", methods=["POST"])
+@login_required
 def update_profile():
-    data = request.get_json(silent=True) or {}
-    user_id = int(request.current_user["sub"])
+    user_id = session.get("user_id")
+    username = request.form.get("username")
+    password = request.form.get("password")
+
     kwargs = {}
-    if data.get("username"):
-        kwargs["username"] = data["username"]
-    if data.get("password"):
-        kwargs["password"] = data["password"]
+    if username:
+        kwargs["username"] = username
+    if password:
+        kwargs["password"] = password
+
     try:
-        UserService().update(user_id, **kwargs)
-        return jsonify({"message": "Perfil actualizado"})
+        updated_user = user_service.update(user_id, **kwargs)
+        session["username"] = updated_user.username
+        flash("Perfil actualizado exitosamente", "success")
     except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+        flash(str(e), "danger")
+    except Exception as e:
+        current_app.logger.error(f"Error al actualizar perfil: {e}")
+        flash("Error al actualizar perfil. Intente nuevamente.", "danger")
+
+    return redirect(url_for("user.profile"))
