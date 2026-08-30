@@ -1,3 +1,4 @@
+from typing import Optional, List
 from app.models.role import Role
 from app.models.user import User
 from app.services.base_service import BaseService
@@ -23,11 +24,11 @@ class UserService(BaseService):
 
         return user
 
-    def get(self, user_id: int) -> User | None:
+    def get(self, user_id: int) -> Optional[User]:
         """Obtener un usuario por ID"""
         return User.query.get(user_id)
 
-    def get_all(self) -> list[User]:
+    def get_all(self) -> List[User]:
         """Obtener todos los usuarios"""
         return User.query.all()
 
@@ -72,7 +73,7 @@ class UserService(BaseService):
         db.session.delete(user)
         db.session.commit()
 
-    def find_by_username(self, username: str) -> User | None:
+    def find_by_username(self, username: str) -> Optional[User]:
         """Buscar usuario por nombre de usuario"""
         return User.query.filter_by(username=username).first()
 

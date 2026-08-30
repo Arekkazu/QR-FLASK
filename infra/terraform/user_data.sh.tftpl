@@ -1,0 +1,89 @@
+#!/bin/bash
+set -eux
+
+dnf update -y
+dnf install -y git python3 python3-pip nginx openssl
+
+APP_DIR="${deploy_path}"
+APP_USER="${app_user}"
+APP_PORT="${app_port}"
+REPO_URL="${repo_url}"
+REPO_BRANCH="${repo_branch}"
+
+mkdir -p "$APP_DIR"
+chown -R "$APP_USER":"$APP_USER" "$APP_DIR"
+
+if [ ! -d "$APP_DIR/.git" ]; then
+  sudo -u "$APP_USER" git clone --branch "$REPO_BRANCH" "$REPO_URL" "$APP_DIR"
+else
+  cd "$APP_DIR"
+  sudo -u "$APP_USER" git fetch origin
+  sudo -u "$APP_USER" git checkout "$REPO_BRANCH"
+  sudo -u "$APP_USER" git pull origin "$REPO_BRANCH"
+fi
+
+cd "$APP_DIR"
+
+sudo -u "$APP_USER" python3 -m venv "$APP_DIR/.venv"
+sudo -u "$APP_USER" "$APP_DIR/.venv/bin/pip" install --upgrade pip
+sudo -u "$APP_USER" "$APP_DIR/.venv/bin/pip" install -r requirements.txt
+
+cat >/etc/systemd/system/${project_name}.service <<EOF
+[Unit]
+Description=${project_name} Flask application
+After=network.target
+
+[Service]
+User=${app_user}
+Group=${app_user}
+WorkingDirectory=${deploy_path}
+# ── AQUÍ INYECTAMOS LAS VARIABLES PARA PRODUCCIÓN ──
+Environment=FLASK_ENV=production
+Environment=DATABASE_URL=${db_url}
+Environment=CORS_ORIGINS=*
+# ──────────────────────────────────────────────────
+ExecStart=${deploy_path}/.venv/bin/gunicorn --bind 127.0.0.1:${app_port} wsgi:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable ${project_name}
+systemctl restart ${project_name}
+
+# Certificado autofirmado
+mkdir -p /etc/nginx/ssl
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout /etc/nginx/ssl/nginx.key \
+  -out /etc/nginx/ssl/nginx.crt \
+  -subj "/C=CO/ST=Local/L=Local/O=QRFlask/CN=${project_name}"
+
+# Nginx: proxy HTTPS → gunicorn
+cat >/etc/nginx/conf.d/${project_name}.conf <<'NGINXEOF'
+server {
+    listen 443 ssl;
+    ssl_certificate     /etc/nginx/ssl/nginx.crt;
+    ssl_certificate_key /etc/nginx/ssl/nginx.key;
+
+    location / {
+        proxy_pass http://127.0.0.1:APP_PORT_PLACEHOLDER;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+server {
+    listen 80;
+    return 301 https://$host$request_uri;
+}
+NGINXEOF
+
+sed -i "s/APP_PORT_PLACEHOLDER/${app_port}/" /etc/nginx/conf.d/${project_name}.conf
+
+rm -f /etc/nginx/conf.d/default.conf
+systemctl enable nginx
+systemctl restart nginx

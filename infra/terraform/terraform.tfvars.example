@@ -1,0 +1,17 @@
+project_name  = "qr-flask"
+aws_region    = "us-east-1"
+instance_type = "t2.micro"
+
+# Must exist in your AWS account before apply
+ssh_key_name = "test-qrflask"
+
+# Replace with your IP in CIDR format, for example: 185.229.216.235/32
+ssh_cidr = "185.229.216.235/32"
+
+# Change only if your app uses another port
+app_port = 5000
+app_cidr = "0.0.0.0/0"
+
+# Git repository and branch to deploy automatically
+repo_url    = "https://github.com/Arekkazu/QR-FLASK.git"
+repo_branch = "deploy"
